@@ -20,13 +20,14 @@ import java.util.List;
 public interface BookingApi {
 
     /**
-     * Books a room for the half-open range {@code [startMinute, endMinute)}.
+     * Books a room for the request's half-open range
+     * {@code [startMinute, endMinute)}.
      *
      * <p>If no CONFIRMED booking on that room overlaps the range, the returned
      * booking is CONFIRMED and holds the room.
      *
      * <p>If some CONFIRMED booking does overlap, what happens next is decided
-     * by {@code waitlistKey}:
+     * by the request's {@code waitlistKey}:
      * <ul>
      *   <li>{@code waitlistKey} null means do not waitlist on conflict. No
      *       booking is created and the method returns null. Nothing about the
@@ -44,8 +45,29 @@ public interface BookingApi {
      * interprets it. The key has no effect when there is no conflict: the
      * booking is CONFIRMED and the key is simply retained.
      *
+     * <p>The request's {@code notes} are free text. This API stores them and
+     * hands them back on {@link Booking#getNotes()}; it never interprets them,
+     * and they never affect conflicts, waitlisting, return values, or
+     * exceptions. When the method returns null, the notes are discarded.
+     *
      * <p>Ids are assigned by the implementation, are unique, and increase in
      * creation order.
+     *
+     * @param request the booking to create, non-null; its {@code roomId} must
+     *                be non-null and its {@code endMinute} must be greater
+     *                than its {@code startMinute}
+     * @return the CONFIRMED booking, the WAITLISTED booking, or null when the
+     *         range conflicts and no waitlist key was given
+     * @throws IllegalArgumentException if {@code request} or its
+     *         {@code roomId} is null, or its {@code endMinute} is not greater
+     *         than its {@code startMinute}
+     */
+    Booking createBooking(BookingRequest request);
+
+    /**
+     * Books a room for the half-open range {@code [startMinute, endMinute)},
+     * with no notes. Behaves exactly as {@link #createBooking(BookingRequest)}
+     * given a request with these fields.
      *
      * @param roomId      the room to book, non-null
      * @param startMinute first minute of the booking, inclusive
@@ -56,9 +78,48 @@ public interface BookingApi {
      *         range conflicts and no waitlist key was given
      * @throws IllegalArgumentException if {@code roomId} is null or
      *         {@code endMinute} is not greater than {@code startMinute}
+     * @deprecated Use {@link #createBooking(BookingRequest)}, building the
+     *             request with
+     *             {@code BookingRequest.builder(roomId, startMinute, endMinute)
+     *             .waitlistKey(waitlistKey).build()}.
      */
-    Booking createBooking(String roomId, long startMinute, long endMinute,
-                          String waitlistKey);
+    @Deprecated
+    default Booking createBooking(String roomId, long startMinute, long endMinute,
+                                  String waitlistKey) {
+        return createBooking(BookingRequest.builder(roomId, startMinute, endMinute)
+                .waitlistKey(waitlistKey)
+                .build());
+    }
+
+    /**
+     * Books a room for the half-open range {@code [startMinute, endMinute)}
+     * and attaches free-text notes. Behaves exactly as
+     * {@link #createBooking(BookingRequest)} given a request with these
+     * fields.
+     *
+     * @param roomId      the room to book, non-null
+     * @param startMinute first minute of the booking, inclusive
+     * @param endMinute   first minute after the booking, exclusive; must be
+     *                    greater than {@code startMinute}
+     * @param waitlistKey caller's waitlist key, or null to decline waitlisting
+     * @param notes       free-text notes for the booking, or null for none
+     * @return the CONFIRMED booking, the WAITLISTED booking, or null when the
+     *         range conflicts and no waitlist key was given
+     * @throws IllegalArgumentException if {@code roomId} is null or
+     *         {@code endMinute} is not greater than {@code startMinute}
+     * @deprecated Use {@link #createBooking(BookingRequest)}, building the
+     *             request with
+     *             {@code BookingRequest.builder(roomId, startMinute, endMinute)
+     *             .waitlistKey(waitlistKey).notes(notes).build()}.
+     */
+    @Deprecated
+    default Booking createBooking(String roomId, long startMinute, long endMinute,
+                                  String waitlistKey, String notes) {
+        return createBooking(BookingRequest.builder(roomId, startMinute, endMinute)
+                .waitlistKey(waitlistKey)
+                .notes(notes)
+                .build());
+    }
 
     /**
      * Returns every non-cancelled booking for one room, ordered by start minute.
